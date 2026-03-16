@@ -1,0 +1,347 @@
+// LIFE Services — Prisma Schema
+// PostgreSQL database with full property maintenance subscription data model
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum BlockType {
+  CORNER
+  INLINE
+}
+
+enum HomeType {
+  LOW_SET
+  HIGH_SET
+}
+
+enum ServiceType {
+  MOWING
+  PEST_CONTROL
+  PRESSURE_WASHING
+  GUTTER_CLEANING
+  GARDENING
+  HANDYMAN
+}
+
+enum Tier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum ContractType {
+  FIXED_12
+  FLEXI
+}
+
+enum PaymentCadence {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+  ANNUALLY
+}
+
+enum ContractStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum VisitStatus {
+  SCHEDULED
+  COMPLETED
+  SKIPPED
+}
+
+enum AddonType {
+  PEST_CONTROL
+  PRESSURE_WASHING
+  GUTTER_CLEANING
+  GARDENING
+  HANDYMAN
+}
+
+enum AddonFrequency {
+  ONE_OFF
+  EVERY_VISIT
+  EVERY_SECOND_VISIT
+  EVERY_3_MONTHS
+  EVERY_6_MONTHS
+  ANNUALLY
+  MONTHLY
+  QUARTERLY
+}
+
+enum ContactPreference {
+  CALL
+  TEXT
+  EMAIL
+}
+
+// ─────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────
+
+model User {
+  id               String            @id @default(cuid())
+  name             String
+  email            String            @unique
+  phone            String?
+  passwordHash     String?
+  preferredContact ContactPreference?
+  hearAboutUs      String?
+  stripeCustomerId String?           @unique
+  emailVerified    DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  properties Property[]
+  contracts  Contract[]
+  payments   Payment[]
+  accounts   Account[]
+  sessions   Session[]
+
+  @@index([email])
+}
+
+// ─────────────────────────────────────────────
+// NEXT-AUTH ADAPTER TABLES (for OAuth support)
+// ─────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// PROPERTY
+// ─────────────────────────────────────────────
+
+model Property {
+  id             String    @id @default(cuid())
+  userId         String
+  address        String
+  suburb         String
+  postcode       String?
+  state          String?   @default("QLD")
+  mowableAreaM2  Float?
+  lat            Float?
+  lng            Float?
+  blockType      BlockType?
+  homeType       HomeType?
+  grassLocations String[]  @default([])
+  hasPool        Boolean   @default(false)
+  accessIssues   String[]  @default([])
+  accessNotes    String?
+  generalNotes   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contracts Contract[]
+
+  @@index([userId])
+  @@index([suburb])
+}
+
+// ─────────────────────────────────────────────
+// CONTRACT
+// Central model — one per subscription or add-on
+// ─────────────────────────────────────────────
+
+model Contract {
+  id                 String         @id @default(cuid())
+  userId             String
+  propertyId         String?
+  serviceType        ServiceType
+  tier               Tier?
+  contractType       ContractType
+  paymentCadence     PaymentCadence
+  basePrice          Float          // Weekly equivalent base price (before discounts)
+  discountedPrice    Float          // Final weekly equivalent after all discounts
+  lockInDiscount     Float          @default(0) // % applied
+  cadenceDiscount    Float          @default(0) // % applied
+  startDate          DateTime
+  endDate            DateTime?
+  confirmedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  upgradedAt         DateTime?
+  previousTier       Tier?
+  status             ContractStatus @default(PENDING)
+  stripeSubscriptionId String?      @unique
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  // Relations
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property?     @relation(fields: [propertyId], references: [id])
+  addons   AddOn[]
+  payments Payment[]
+  visits   ServiceVisit[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([serviceType])
+}
+
+// ─────────────────────────────────────────────
+// ADD-ON
+// Each add-on is linked to a contract (can be standalone or part of mowing)
+// ─────────────────────────────────────────────
+
+model AddOn {
+  id           String         @id @default(cuid())
+  contractId   String
+  addonType    AddonType
+  frequency    AddonFrequency
+  blockSizeMins Int?           // For gardening blocks (15/30/45/60 mins)
+  unitPrice    Float          // Per-service price
+  totalPrice   Float          // Full contract total (for one-off or spread payments)
+  status       ContractStatus @default(PENDING)
+  stripeItemId String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+}
+
+// ─────────────────────────────────────────────
+// PAYMENT
+// Each scheduled or completed payment against a contract
+// ─────────────────────────────────────────────
+
+model Payment {
+  id                    String        @id @default(cuid())
+  contractId            String
+  userId                String
+  amount                Float
+  cadence               PaymentCadence
+  dueDate               DateTime
+  paidAt                DateTime?
+  status                PaymentStatus @default(PENDING)
+  stripePaymentIntentId String?       @unique
+  failureReason         String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([userId])
+  @@index([dueDate])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────
+// SERVICE VISIT
+// Individual scheduled or completed on-site visits
+// ─────────────────────────────────────────────
+
+model ServiceVisit {
+  id             String      @id @default(cuid())
+  contractId     String
+  scheduledDate  DateTime
+  completedDate  DateTime?
+  status         VisitStatus @default(SCHEDULED)
+  notes          String?
+  technicianName String?
+  beforePhotoUrl String?
+  afterPhotoUrl  String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([scheduledDate])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────
+// PRICING SNAPSHOT
+// Stores the pricing inputs at quote time for audit/history
+// ─────────────────────────────────────────────
+
+model PricingSnapshot {
+  id                String   @id @default(cuid())
+  contractId        String?
+  userId            String?
+  sessionId         String?  // For anonymous wizard sessions
+  mowableAreaM2     Float?
+  blockType         BlockType?
+  homeType          HomeType?
+  grassLocations    String[] @default([])
+  hasPool           Boolean  @default(false)
+  tier              Tier?
+  contractType      ContractType?
+  paymentCadence    PaymentCadence?
+  baseWeeklyPrice   Float?
+  discountedWeekly  Float?
+  lockInDiscount    Float?
+  cadenceDiscount   Float?
+  addonsTotalWeekly Float?
+  snapshotData      Json?    // Full JSON of pricing breakdown for audit
+  createdAt         DateTime @default(now())
+
+  @@index([contractId])
+  @@index([userId])
+  @@index([sessionId])
+}

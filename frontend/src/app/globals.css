@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-green: #00C853;
+    --color-navy: #1A3C5E;
+    --color-teal: #00BFA5;
+    --color-bg: #F5F5F5;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-green text-white font-semibold px-6 py-3 rounded-xl hover:bg-green-600 transition-colors duration-200 inline-flex items-center gap-2;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-brand-navy font-semibold px-6 py-3 rounded-xl border-2 border-brand-navy hover:bg-brand-bg transition-colors duration-200 inline-flex items-center gap-2;
+  }
+
+  .btn-outline-green {
+    @apply bg-transparent text-brand-green font-semibold px-6 py-3 rounded-xl border-2 border-brand-green hover:bg-brand-green hover:text-white transition-colors duration-200 inline-flex items-center gap-2;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-card p-6;
+  }
+
+  .input {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all duration-200 text-brand-navy placeholder-gray-400;
+  }
+
+  .label {
+    @apply block text-sm font-semibold text-brand-navy mb-1.5;
+  }
+
+  .section-heading {
+    @apply text-3xl md:text-4xl font-bold text-brand-navy leading-tight;
+  }
+
+  .section-sub {
+    @apply text-lg text-gray-500 mt-3 max-w-xl;
+  }
+}
