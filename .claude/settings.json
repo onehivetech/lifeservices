@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "nano-banana@buildatscale-claude-code": true
+  }
+}
